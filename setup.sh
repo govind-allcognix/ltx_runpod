@@ -25,11 +25,32 @@ apt-get update -qq && apt-get install -y -qq \
     build-essential libssl-dev
 
 # Install uv (fast Python package manager required by LTX-2)
+# uv installs to ~/.local/bin on Linux; source its env file so the current
+# shell session can find it immediately without needing a new login shell.
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
 if ! command -v uv &>/dev/null; then
     echo "[*] Installing uv..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.cargo/bin:$PATH"
+    # Source the env file the installer generates (sets PATH correctly)
+    if [ -f "$HOME/.local/bin/env" ]; then
+        # shellcheck source=/dev/null
+        source "$HOME/.local/bin/env"
+    elif [ -f "$HOME/.cargo/env" ]; then
+        # shellcheck source=/dev/null
+        source "$HOME/.cargo/env"
+    fi
+    # Hard-set PATH as a final fallback
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
+
+# Verify uv is now available
+if ! command -v uv &>/dev/null; then
+    echo "[ERROR] uv still not found after installation. PATH=$PATH"
+    echo "Try running: export PATH=\$HOME/.local/bin:\$PATH && bash setup.sh"
+    exit 1
+fi
+echo "[*] uv found: $(uv --version)"
 
 # ── 2. Clone repo ─────────────────────────────────────────────
 if [ ! -d "$REPO_DIR" ]; then
