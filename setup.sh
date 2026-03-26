@@ -75,52 +75,71 @@ echo "[*] Virtual environment ready at $REPO_DIR/.venv"
 # ── 4. Create model directories ───────────────────────────────
 mkdir -p "$MODELS_DIR" "$GEMMA_DIR"
 
-# ── 5. Download LTX-2.3 model checkpoints ────────────────────
-# Source repo: https://huggingface.co/Lightricks/LTX-2.3
-# Choose ONE of: dev (quality) or distilled (speed)
-HF_BASE="https://huggingface.co/Lightricks/LTX-2.3/resolve/main"
+# ── 5. Install huggingface_hub + hf_transfer for fast downloads ──
+# hf_transfer is a Rust-based downloader from HF — much faster than wget.
+# HF_HUB_ENABLE_HF_TRANSFER=1 activates it automatically for all hf commands.
+echo "[*] Installing huggingface_hub with hf_transfer..."
+pip install -q "huggingface_hub[hf_transfer,cli]" hf_transfer
+export HF_HUB_ENABLE_HF_TRANSFER=1
 
-echo "[*] Downloading LTX-2.3 distilled checkpoint (recommended for speed)..."
-wget -q --show-progress -c \
-    "${HF_BASE}/ltx-2.3-22b-distilled.safetensors" \
-    -O "$MODELS_DIR/ltx-2.3-22b-distilled.safetensors"
+# Helper: skip download if file already exists
+hf_download_file() {
+    local repo="$1" filename="$2" dest="$3"
+    if [ -f "$dest" ]; then
+        echo "[skip] $filename already exists."
+        return
+    fi
+    echo "[*] Downloading $filename ..."
+    huggingface-cli download "$repo" "$filename" \
+        --local-dir "$(dirname "$dest")" \
+        --local-dir-use-symlinks False \
+        ${HF_TOKEN:+--token "$HF_TOKEN"}
+}
+
+# ── 6. Download LTX-2.3 model checkpoint ─────────────────────
+# Source repo: https://huggingface.co/Lightricks/LTX-2.3
+# Choose ONE of: distilled (speed/default) or dev (quality)
+hf_download_file \
+    Lightricks/LTX-2.3 \
+    ltx-2.3-22b-distilled.safetensors \
+    "$MODELS_DIR/ltx-2.3-22b-distilled.safetensors"
 
 # Uncomment for the dev (non-distilled, higher quality) checkpoint:
-# echo "[*] Downloading LTX-2.3 dev checkpoint..."
-# wget -q --show-progress -c \
-#     "${HF_BASE}/ltx-2.3-22b-dev.safetensors" \
-#     -O "$MODELS_DIR/ltx-2.3-22b-dev.safetensors"
+# hf_download_file \
+#     Lightricks/LTX-2.3 \
+#     ltx-2.3-22b-dev.safetensors \
+#     "$MODELS_DIR/ltx-2.3-22b-dev.safetensors"
 
-# ── 6. Download spatial upsampler ─────────────────────────────
+# ── 7. Download spatial upsampler ─────────────────────────────
 # Required for all two-stage pipelines
-echo "[*] Downloading spatial upsampler (x2)..."
-wget -q --show-progress -c \
-    "${HF_BASE}/ltx-2.3-spatial-upscaler-x2-1.0.safetensors" \
-    -O "$MODELS_DIR/ltx-2.3-spatial-upscaler-x2-1.0.safetensors"
+hf_download_file \
+    Lightricks/LTX-2.3 \
+    ltx-2.3-spatial-upscaler-x2-1.0.safetensors \
+    "$MODELS_DIR/ltx-2.3-spatial-upscaler-x2-1.0.safetensors"
 
-# Optional x1.5 upscaler (lighter):
-# wget -q --show-progress -c \
-#     "${HF_BASE}/ltx-2.3-spatial-upscaler-x1.5-1.0.safetensors" \
-#     -O "$MODELS_DIR/ltx-2.3-spatial-upscaler-x1.5-1.0.safetensors"
+# Optional x1.5 upscaler (lighter VRAM):
+# hf_download_file \
+#     Lightricks/LTX-2.3 \
+#     ltx-2.3-spatial-upscaler-x1.5-1.0.safetensors \
+#     "$MODELS_DIR/ltx-2.3-spatial-upscaler-x1.5-1.0.safetensors"
 
-# ── 7. Download distilled LoRA ────────────────────────────────
+# ── 8. Download distilled LoRA ────────────────────────────────
 # Required for TwoStage* pipelines (NOT needed for DistilledPipeline or ICLoraPipeline)
-echo "[*] Downloading distilled LoRA..."
-wget -q --show-progress -c \
-    "${HF_BASE}/ltx-2.3-22b-distilled-lora-384.safetensors" \
-    -O "$MODELS_DIR/ltx-2.3-22b-distilled-lora-384.safetensors"
+hf_download_file \
+    Lightricks/LTX-2.3 \
+    ltx-2.3-22b-distilled-lora-384.safetensors \
+    "$MODELS_DIR/ltx-2.3-22b-distilled-lora-384.safetensors"
 
-# ── 8. Download Gemma 3 text encoder ─────────────────────────
-# Full repo clone needed (config + tokenizer + model weights)
+# ── 9. Download Gemma 3 text encoder ─────────────────────────
+# Pulls all files in the repo (config + tokenizer + weights)
 echo "[*] Downloading Gemma 3 text encoder..."
-pip install -q huggingface_hub[cli] 2>/dev/null || true
 huggingface-cli download \
     google/gemma-3-12b-it-qat-q4_0-unquantized \
     --local-dir "$GEMMA_DIR" \
     --local-dir-use-symlinks False \
     ${HF_TOKEN:+--token "$HF_TOKEN"}
 
-# ── 9. Summary ────────────────────────────────────────────────
+# ── 10. Summary ───────────────────────────────────────────────
 echo ""
 echo "=============================="
 echo " Setup Complete!"
