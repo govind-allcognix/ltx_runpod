@@ -79,10 +79,12 @@ mkdir -p "$MODELS_DIR" "$GEMMA_DIR"
 # hf_transfer is a Rust-based downloader from HF — much faster than wget.
 # HF_HUB_ENABLE_HF_TRANSFER=1 activates it automatically for all hf commands.
 echo "[*] Installing huggingface_hub with hf_transfer..."
-pip install -q "huggingface_hub[hf_transfer,cli]" hf_transfer
+python3 -m pip install -q "huggingface_hub[hf_transfer,cli]" hf_transfer
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
-# Helper: skip download if file already exists
+# Use 'python3 -m huggingface_hub' instead of 'huggingface-cli'.
+# This avoids PATH issues: the module is guaranteed to be importable
+# by the same Python that just installed it, regardless of shell PATH.
 hf_download_file() {
     local repo="$1" filename="$2" dest="$3"
     if [ -f "$dest" ]; then
@@ -90,7 +92,7 @@ hf_download_file() {
         return
     fi
     echo "[*] Downloading $filename ..."
-    huggingface-cli download "$repo" "$filename" \
+    python3 -m huggingface_hub download "$repo" "$filename" \
         --local-dir "$(dirname "$dest")" \
         --local-dir-use-symlinks False \
         ${HF_TOKEN:+--token "$HF_TOKEN"}
@@ -133,7 +135,7 @@ hf_download_file \
 # ── 9. Download Gemma 3 text encoder ─────────────────────────
 # Pulls all files in the repo (config + tokenizer + weights)
 echo "[*] Downloading Gemma 3 text encoder..."
-huggingface-cli download \
+python3 -m huggingface_hub download \
     google/gemma-3-12b-it-qat-q4_0-unquantized \
     --local-dir "$GEMMA_DIR" \
     --local-dir-use-symlinks False \
