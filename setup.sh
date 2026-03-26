@@ -82,9 +82,8 @@ echo "[*] Installing huggingface_hub with hf_transfer..."
 python3 -m pip install -q "huggingface_hub[hf_transfer,cli]" hf_transfer
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
-# Use 'python3 -m huggingface_hub' instead of 'huggingface-cli'.
-# This avoids PATH issues: the module is guaranteed to be importable
-# by the same Python that just installed it, regardless of shell PATH.
+# Use the huggingface_hub Python API directly — no CLI binary needed,
+# no PATH issues. hf_hub_download handles resume + hf_transfer automatically.
 hf_download_file() {
     local repo="$1" filename="$2" dest="$3"
     if [ -f "$dest" ]; then
@@ -92,10 +91,16 @@ hf_download_file() {
         return
     fi
     echo "[*] Downloading $filename ..."
-    python3 -m huggingface_hub download "$repo" "$filename" \
-        --local-dir "$(dirname "$dest")" \
-        --local-dir-use-symlinks False \
-        ${HF_TOKEN:+--token "$HF_TOKEN"}
+    python3 -c "
+import os, sys
+from huggingface_hub import hf_hub_download
+hf_hub_download(
+    repo_id=sys.argv[1],
+    filename=sys.argv[2],
+    local_dir=sys.argv[3],
+    local_dir_use_symlinks=False,
+    token=os.environ.get('HF_TOKEN') or None,
+)" "$repo" "$filename" "$(dirname "$dest")"
 }
 
 # ── 6. Download LTX-2.3 model checkpoint ─────────────────────
@@ -134,12 +139,16 @@ hf_download_file \
 
 # ── 9. Download Gemma 3 text encoder ─────────────────────────
 # Pulls all files in the repo (config + tokenizer + weights)
-echo "[*] Downloading Gemma 3 text encoder..."
-python3 -m huggingface_hub download \
-    google/gemma-3-12b-it-qat-q4_0-unquantized \
-    --local-dir "$GEMMA_DIR" \
-    --local-dir-use-symlinks False \
-    ${HF_TOKEN:+--token "$HF_TOKEN"}
+echo "[*] Downloading Gemma 3 text encoder (full repo)..."
+python3 -c "
+import os, sys
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id=sys.argv[1],
+    local_dir=sys.argv[2],
+    local_dir_use_symlinks=False,
+    token=os.environ.get('HF_TOKEN') or None,
+)" "google/gemma-3-12b-it-qat-q4_0-unquantized" "$GEMMA_DIR"
 
 # ── 10. Summary ───────────────────────────────────────────────
 echo ""
